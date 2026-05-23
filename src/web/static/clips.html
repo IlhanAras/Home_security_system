@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hybrid IoT Security Clips</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <script>
+        (function () {
+            try {
+                const stored = localStorage.getItem("sec.theme");
+                const prefersDark = window.matchMedia &&
+                    window.matchMedia("(prefers-color-scheme: dark)").matches;
+                const useDark = stored ? stored === "dark" : prefersDark;
+                document.documentElement.classList.toggle("dark", useDark);
+            } catch (e) { /* ignore */ }
+        })();
+    </script>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"]
+                    }
+                }
+            }
+        };
+    </script>
+
+    <link rel="stylesheet" href="/style.css">
+</head>
+
+<body class="font-sans antialiased bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen">
+
+    <header class="border-b border-slate-200 dark:border-slate-800">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4 px-6 py-5">
+            <div class="flex flex-wrap items-center gap-5">
+                <h1 class="text-lg font-semibold tracking-tight">Hybrid IoT Security</h1>
+                <nav class="flex items-center gap-2 text-sm">
+                    <a href="/"
+                       class="px-3.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                        Dashboard
+                    </a>
+                    <a href="/clips.html"
+                       class="px-3.5 py-1.5 rounded-lg bg-blue-600 text-white">
+                        Clips
+                    </a>
+                </nav>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-5 text-sm">
+                <button id="btn-pir-toggle" type="button"
+                        class="px-3.5 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-semibold transition">
+                    PIR: ON
+                </button>
+                <div class="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+                    <span id="ws-dot" class="h-2 w-2 rounded-full bg-slate-400 dark:bg-slate-600"></span>
+                    <span id="ws-label">WebSocket: disconnected</span>
+                </div>
+                <div class="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+                    <span id="mqtt-dot" class="h-2 w-2 rounded-full bg-slate-400 dark:bg-slate-600"></span>
+                    <span id="mqtt-label">Broker: unknown</span>
+                </div>
+
+                <button id="theme-toggle" type="button"
+                        class="px-3.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                    Light
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-6 py-8">
+        <section class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <div class="relative flex items-center justify-center bg-slate-900 dark:bg-black rounded-xl overflow-hidden min-h-[320px] border border-slate-200 dark:border-slate-800">
+                        <img id="clip-player" alt="clip playback" class="max-w-full hidden">
+                        <div id="clip-placeholder" class="text-slate-400 text-sm p-10 text-center">
+                            Select a motion event to play back.
+                        </div>
+                    </div>
+                    <div id="clip-controls" class="hidden mt-3 flex items-center gap-3">
+                        <button id="btn-play-pause" type="button"
+                                class="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition w-12 text-center">
+                            ▶
+                        </button>
+                        <input id="seek-bar" type="range" min="0" max="0" value="0" step="1"
+                               class="flex-1 accent-blue-600">
+                        <span id="time-label" class="text-xs font-mono text-slate-500 dark:text-slate-400 whitespace-nowrap">0.00 / 0.00 s</span>
+                    </div>
+                    <div id="clip-now-playing" class="mt-2 text-xs font-mono text-slate-500 dark:text-slate-400">&nbsp;</div>
+                </div>
+
+                <div>
+                    <div class="flex items-center justify-between gap-2 mb-3">
+                        <div class="flex items-center gap-2">
+                            <button id="filter-all" type="button"
+                                    class="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium transition">
+                                All
+                            </button>
+                            <button id="filter-fav" type="button"
+                                    class="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-medium transition">
+                                ★ Favorites
+                            </button>
+                        </div>
+                        <button id="btn-bulk-delete" type="button"
+                                class="hidden px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-medium transition">
+                            Delete selected
+                        </button>
+                    </div>
+                    <div class="clip-scroll rounded-xl border border-slate-200 dark:border-slate-800 overflow-y-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-slate-50 dark:bg-slate-900">
+                                <tr class="text-left text-[0.7rem] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                                    <th class="px-4 py-2.5 sticky top-0 bg-slate-50 dark:bg-slate-900 w-10">
+                                        <input id="select-all" type="checkbox" class="h-4 w-4 align-middle accent-blue-600" title="Select all">
+                                    </th>
+                                    <th class="px-4 py-2.5 sticky top-0 bg-slate-50 dark:bg-slate-900">#</th>
+                                    <th class="px-4 py-2.5 sticky top-0 bg-slate-50 dark:bg-slate-900">Time</th>
+                                    <th class="px-4 py-2.5 sticky top-0 bg-slate-50 dark:bg-slate-900">Frames</th>
+                                    <th class="px-4 py-2.5 sticky top-0 bg-slate-50 dark:bg-slate-900">FPS</th>
+                                    <th class="px-4 py-2.5 sticky top-0 bg-slate-50 dark:bg-slate-900">Duration</th>
+                                    <th class="px-4 py-2.5 sticky top-0 bg-slate-50 dark:bg-slate-900 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="clip-body" class="divide-y divide-slate-100 dark:divide-slate-800">
+                                <tr><td colspan="7" class="px-4 py-6 text-center text-slate-500 dark:text-slate-400">No motion clips yet.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // Theme toggle (shared key with the dashboard)
+        (function () {
+            const btn = document.getElementById("theme-toggle");
+            const isDark = () => document.documentElement.classList.contains("dark");
+            btn.textContent = isDark() ? "Light" : "Dark";
+            btn.addEventListener("click", () => {
+                const next = !isDark();
+                document.documentElement.classList.toggle("dark", next);
+                localStorage.setItem("sec.theme", next ? "dark" : "light");
+                btn.textContent = next ? "Light" : "Dark";
+            });
+        })();
+
+        const els = {
+            wsDot:      document.getElementById("ws-dot"),
+            wsLabel:    document.getElementById("ws-label"),
+            mqttDot:    document.getElementById("mqtt-dot"),
+            mqttLabel:  document.getElementById("mqtt-label"),
+
+            clipPlayer:      document.getElementById("clip-player"),
+            clipPlaceholder: document.getElementById("clip-placeholder"),
+            clipBody:        document.getElementById("clip-body"),
+            clipNowPlaying:  document.getElementById("clip-now-playing"),
+
+            filterAll: document.getElementById("filter-all"),
+            filterFav: document.getElementById("filter-fav"),
+
+            btnPirToggle:  document.getElementById("btn-pir-toggle"),
+            btnBulkDelete: document.getElementById("btn-bulk-delete"),
+            selectAll:     document.getElementById("select-all"),
+
+            clipControls:  document.getElementById("clip-controls"),
+            btnPlayPause:  document.getElementById("btn-play-pause"),
+            seekBar:       document.getElementById("seek-bar"),
+            timeLabel:     document.getElementById("time-label"),
+        };
+
+        // Active view: "all" or "favorites". Persisted in sessionStorage so
+        // jumping to Dashboard and back keeps the same filter.
+        let currentFilter = sessionStorage.getItem("sec.clipFilter") || "all";
+        // Currently-playing clip id, so a delete that hits it can clear the
+        // player instead of leaving a broken src behind.
+        let playingClipId = null;
+        // Clip ids the user has ticked for bulk delete. Cleared on filter
+        // change so hidden rows don't get swept up by "Delete selected".
+        const selectedIds = new Set();
+        // Mirror of the PIR-armed state (shared across tabs via backend).
+        let pirEnabled = true;
+
+        const FILTER_ACTIVE_CLASS   = "px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium transition";
+        const FILTER_INACTIVE_CLASS = "px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-medium transition";
+
+        function applyFilter(filter) {
+            currentFilter = filter;
+            sessionStorage.setItem("sec.clipFilter", filter);
+            els.filterAll.className = filter === "all" ? FILTER_ACTIVE_CLASS : FILTER_INACTIVE_CLASS;
+            els.filterFav.className = filter === "favorites" ? FILTER_ACTIVE_CLASS : FILTER_INACTIVE_CLASS;
+            // Different view → clear selection so we never delete rows the
+            // user can't currently see.
+            selectedIds.clear();
+            loadClips();
+        }
+
+        els.filterAll.addEventListener("click", () => applyFilter("all"));
+        els.filterFav.addEventListener("click", () => applyFilter("favorites"));
+
+        // Paint the filter buttons to match the restored state on first load.
+        applyFilter(currentFilter);
+
+        function setDot(elem, on) {
+            elem.classList.toggle("dot-on", on);
+            elem.classList.toggle("dot-off", !on);
+        }
+
+        async function pollHealth() {
+            try {
+                const res = await fetch("/api/health");
+                const data = await res.json();
+                if (data.mqtt_connected) {
+                    setDot(els.mqttDot, true);
+                    els.mqttLabel.textContent = `Broker: ${data.broker}`;
+                } else {
+                    setDot(els.mqttDot, false);
+                    els.mqttLabel.textContent = "Broker: disconnected";
+                }
+                if (data.pir_enabled !== undefined) {
+                    pirEnabled = !!data.pir_enabled;
+                    renderPirButton();
+                }
+            } catch {
+                setDot(els.mqttDot, false);
+                els.mqttLabel.textContent = "Broker: unknown";
+            }
+        }
+
+        // PIR arm/disarm pill — identical styling and behaviour to the
+        // dashboard's, so the header can be truly shared across both pages.
+        const PIR_ON_CLASS  = "px-3.5 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-semibold transition";
+        const PIR_OFF_CLASS = "px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition";
+
+        function renderPirButton() {
+            els.btnPirToggle.textContent = pirEnabled ? "PIR: ON" : "PIR: OFF";
+            els.btnPirToggle.className   = pirEnabled ? PIR_ON_CLASS : PIR_OFF_CLASS;
+        }
+
+        els.btnPirToggle.addEventListener("click", async () => {
+            pirEnabled = !pirEnabled;
+            sessionStorage.setItem("sec.pirEnabled", String(pirEnabled));
+            renderPirButton();
+            try {
+                await fetch("/api/command", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ command: pirEnabled ? "pir_on" : "pir_off" }),
+                });
+            } catch (err) {
+                console.warn("pir command failed:", err);
+            }
+        });
+
+        // Paint once from sessionStorage so the initial label matches what
+        // the dashboard left; pollHealth() will reconcile with the backend.
+        (function initPirFromSession() {
+            const stored = sessionStorage.getItem("sec.pirEnabled");
+            if (stored !== null) pirEnabled = stored === "true";
+            renderPirButton();
+        })();
+
+        function formatTime(iso) {
+            if (!iso) return "—";
+            try { return new Date(iso).toLocaleString(); } catch { return iso; }
+        }
+
+        const ROW_CLASS = "hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer";
+        const TD_CLASS  = "px-4 py-2 align-top";
+
+        function renderClipRow(clip) {
+            const tr = document.createElement("tr");
+            tr.className = ROW_CLASS;
+            const isChecked = selectedIds.has(clip.id);
+            const clipFps = clip.fps > 0 ? clip.fps : 2;
+            const clipDur = clip.frame_count / clipFps;
+            tr.innerHTML = `
+                <td class="${TD_CLASS} w-10">
+                    <input type="checkbox" class="clip-select h-4 w-4 align-middle accent-blue-600" data-id="${clip.id}" ${isChecked ? "checked" : ""}>
+                </td>
+                <td class="${TD_CLASS} text-slate-400 dark:text-slate-500">${clip.id}</td>
+                <td class="${TD_CLASS} text-slate-600 dark:text-slate-300 whitespace-nowrap"></td>
+                <td class="${TD_CLASS} text-slate-600 dark:text-slate-300">${clip.frame_count}</td>
+                <td class="${TD_CLASS} text-slate-600 dark:text-slate-300">${clipFps.toFixed(1)}</td>
+                <td class="${TD_CLASS} text-slate-600 dark:text-slate-300">${clipDur.toFixed(1)}s</td>
+                <td class="${TD_CLASS} text-right whitespace-nowrap">
+                    <button type="button" class="fav-btn text-lg leading-none align-middle px-1 ${clip.favorite ? "text-yellow-400" : "text-slate-400 hover:text-yellow-400"}" title="${clip.favorite ? "Unfavorite" : "Favorite"}">${clip.favorite ? "★" : "☆"}</button>
+                    <button type="button" class="del-btn text-lg leading-none align-middle px-1 text-slate-400 hover:text-red-500" title="Delete">✕</button>
+                </td>`;
+            tr.querySelectorAll("td")[2].textContent = formatTime(clip.timestamp);
+
+            tr.addEventListener("click", (e) => {
+                // Clicks on the action buttons / checkbox are handled by
+                // their own listeners; don't trigger playback.
+                if (e.target.closest(".fav-btn, .del-btn, .clip-select")) return;
+                playClip(clip);
+            });
+            const cb = tr.querySelector(".clip-select");
+            cb.addEventListener("click", (e) => e.stopPropagation());
+            cb.addEventListener("change", () => {
+                if (cb.checked) selectedIds.add(clip.id);
+                else            selectedIds.delete(clip.id);
+                updateSelectionUI();
+            });
+            tr.querySelector(".fav-btn").addEventListener("click", (e) => {
+                e.stopPropagation();
+                toggleFavorite(clip);
+            });
+            tr.querySelector(".del-btn").addEventListener("click", (e) => {
+                e.stopPropagation();
+                deleteClip(clip);
+            });
+            return tr;
+        }
+
+        // Keep the "Delete selected (N)" button + the select-all checkbox
+        // in sync with the `selectedIds` set.
+        function updateSelectionUI() {
+            const count = selectedIds.size;
+            els.btnBulkDelete.textContent = count > 0
+                ? `Delete selected (${count})`
+                : "Delete selected";
+            els.btnBulkDelete.classList.toggle("hidden", count === 0);
+
+            const visibleBoxes = Array.from(document.querySelectorAll(".clip-select"));
+            if (visibleBoxes.length === 0) {
+                els.selectAll.checked = false;
+                els.selectAll.indeterminate = false;
+                return;
+            }
+            const checkedCount = visibleBoxes.filter(b => b.checked).length;
+            els.selectAll.checked = checkedCount === visibleBoxes.length;
+            els.selectAll.indeterminate = checkedCount > 0 && checkedCount < visibleBoxes.length;
+        }
+
+        els.selectAll.addEventListener("change", () => {
+            const checked = els.selectAll.checked;
+            document.querySelectorAll(".clip-select").forEach(cb => {
+                const id = Number(cb.dataset.id);
+                cb.checked = checked;
+                if (checked) selectedIds.add(id);
+                else         selectedIds.delete(id);
+            });
+            updateSelectionUI();
+        });
+
+        async function bulkDelete() {
+            const ids = Array.from(selectedIds);
+            if (ids.length === 0) return;
+            if (!confirm(`${ids.length} clip silinsin mi?`)) return;
+            try {
+                const res = await fetch("/api/clips/bulk-delete", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ ids }),
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                if (playingClipId !== null && ids.includes(playingClipId)) {
+                    resetPlayer();
+                }
+                selectedIds.clear();
+                loadClips();
+            } catch (err) {
+                console.warn("bulkDelete failed:", err);
+            }
+        }
+
+        els.btnBulkDelete.addEventListener("click", bulkDelete);
+
+        // --- Custom clip player --------------------------------------
+        // Plays a finalized clip by stepping through /api/clips/{id}/frame/{seq}
+        // at the clip's *recorded* fps. Gives us proper play/pause + scrubber
+        // semantics without needing to transcode JPEGs into a video container.
+        const player = {
+            clipId: null,
+            frameCount: 0,
+            fps: 2,
+            playhead: 0,
+            isPlaying: false,
+            tickId: null,
+        };
+
+        function showClipControls() { els.clipControls.classList.remove("hidden"); }
+        function hideClipControls() { els.clipControls.classList.add("hidden"); }
+
+        function frameUrl(seq) { return `/api/clips/${player.clipId}/frame/${seq}`; }
+
+        function renderFrame() {
+            if (player.clipId === null) return;
+            els.clipPlayer.src = frameUrl(player.playhead);
+            els.clipPlayer.classList.remove("hidden");
+            els.clipPlaceholder.classList.add("hidden");
+        }
+
+        function updateTimeLabel() {
+            const fps = Math.max(player.fps, 0.1);
+            const cur   = player.playhead    / fps;
+            const total = player.frameCount  / fps;
+            els.timeLabel.textContent = `${cur.toFixed(2)} / ${total.toFixed(2)} s`;
+        }
+
+        function stopTicker() {
+            if (player.tickId !== null) {
+                clearInterval(player.tickId);
+                player.tickId = null;
+            }
+        }
+
+        function tick() {
+            if (!player.isPlaying) return;
+            player.playhead++;
+            if (player.playhead >= player.frameCount) {
+                player.playhead = player.frameCount - 1;
+                els.seekBar.value = player.playhead;
+                updateTimeLabel();
+                pausePlayback();
+                return;
+            }
+            els.seekBar.value = player.playhead;
+            renderFrame();
+            updateTimeLabel();
+        }
+
+        function playPlayback() {
+            if (player.frameCount === 0) return;
+            // If we're sitting on the last frame, rewind to start — feels
+            // like a real player's "click play after it ended".
+            if (player.playhead >= player.frameCount - 1) player.playhead = 0;
+            player.isPlaying = true;
+            els.btnPlayPause.textContent = "⏸";
+            els.seekBar.value = player.playhead;
+            renderFrame();
+            updateTimeLabel();
+            stopTicker();
+            player.tickId = setInterval(tick, 1000 / Math.max(player.fps, 0.5));
+        }
+
+        function pausePlayback() {
+            player.isPlaying = false;
+            stopTicker();
+            els.btnPlayPause.textContent = "▶";
+        }
+
+        function resetPlayer() {
+            pausePlayback();
+            player.clipId = null;
+            player.frameCount = 0;
+            player.playhead = 0;
+            playingClipId = null;
+            els.clipPlayer.removeAttribute("src");
+            els.clipPlayer.classList.add("hidden");
+            els.clipPlaceholder.classList.remove("hidden");
+            els.clipNowPlaying.innerHTML = "&nbsp;";
+            hideClipControls();
+        }
+
+        async function playClip(clip) {
+            try {
+                const res = await fetch(`/api/clips/${clip.id}/meta`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const meta = await res.json();
+                pausePlayback();            // stop any previous clip's ticker
+                player.clipId     = clip.id;
+                player.frameCount = meta.frame_count;
+                player.fps        = meta.fps > 0 ? meta.fps : 2;
+                player.playhead   = 0;
+                playingClipId     = clip.id;
+
+                els.seekBar.min   = 0;
+                els.seekBar.max   = Math.max(0, player.frameCount - 1);
+                els.seekBar.value = 0;
+
+                const star = clip.favorite ? " ★" : "";
+                const dur  = (player.frameCount / Math.max(player.fps, 0.1)).toFixed(2);
+                els.clipNowPlaying.textContent =
+                    `Clip #${clip.id} · ${formatTime(clip.timestamp)} · ` +
+                    `${player.frameCount} frames · ${player.fps.toFixed(1)} fps · ${dur}s${star}`;
+
+                showClipControls();
+                renderFrame();
+                playPlayback();
+            } catch (err) {
+                console.warn("playClip failed:", err);
+            }
+        }
+
+        els.btnPlayPause.addEventListener("click", () => {
+            if (player.clipId === null) return;
+            if (player.isPlaying) pausePlayback();
+            else                  playPlayback();
+        });
+
+        els.seekBar.addEventListener("input", () => {
+            if (player.clipId === null) return;
+            player.playhead = Number(els.seekBar.value);
+            renderFrame();
+            updateTimeLabel();
+        });
+
+        async function toggleFavorite(clip) {
+            const next = !clip.favorite;
+            try {
+                const res = await fetch(`/api/clips/${clip.id}/favorite`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ favorite: next }),
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                loadClips();
+            } catch (err) {
+                console.warn("toggleFavorite failed:", err);
+            }
+        }
+
+        async function deleteClip(clip) {
+            if (!confirm(`Clip #${clip.id} silinsin mi?`)) return;
+            try {
+                const res = await fetch(`/api/clips/${clip.id}`, { method: "DELETE" });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                if (playingClipId === clip.id) resetPlayer();
+                selectedIds.delete(clip.id);
+                loadClips();
+            } catch (err) {
+                console.warn("deleteClip failed:", err);
+            }
+        }
+
+        async function loadClips() {
+            try {
+                const url = currentFilter === "favorites"
+                    ? "/api/clips?limit=50&favorites=true"
+                    : "/api/clips?limit=50";
+                const res = await fetch(url);
+                const data = await res.json();
+                els.clipBody.innerHTML = "";
+                if (!data.clips || data.clips.length === 0) {
+                    const msg = currentFilter === "favorites"
+                        ? "No favorite clips yet."
+                        : "No motion clips yet.";
+                    els.clipBody.innerHTML =
+                        `<tr><td colspan="7" class="px-4 py-6 text-center text-slate-500 dark:text-slate-400">${msg}</td></tr>`;
+                    updateSelectionUI();
+                    return;
+                }
+                // Drop selections for clips that no longer exist (deleted
+                // elsewhere, filter changed, etc.) so the count matches DOM.
+                const visibleIds = new Set(data.clips.map(c => c.id));
+                for (const id of Array.from(selectedIds)) {
+                    if (!visibleIds.has(id)) selectedIds.delete(id);
+                }
+                for (const clip of data.clips) {
+                    els.clipBody.appendChild(renderClipRow(clip));
+                }
+                updateSelectionUI();
+            } catch (err) {
+                console.warn("loadClips failed:", err);
+            }
+        }
+
+        // Real-time refresh: the backend broadcasts {type:"clip_ready"} over
+        // the same /ws channel the dashboard uses; we only care about that
+        // one message here, everything else is ignored.
+        function openSocket() {
+            const proto = window.location.protocol === "https:" ? "wss" : "ws";
+            const ws = new WebSocket(`${proto}://${window.location.host}/ws`);
+            ws.addEventListener("open", () => {
+                setDot(els.wsDot, true);
+                els.wsLabel.textContent = "WebSocket: connected";
+            });
+            ws.addEventListener("message", (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data.type === "clip_ready") loadClips();
+                } catch { /* ignore */ }
+            });
+            ws.addEventListener("close", () => {
+                setDot(els.wsDot, false);
+                els.wsLabel.textContent = "WebSocket: reconnecting...";
+                setTimeout(openSocket, 2000);
+            });
+            ws.addEventListener("error", () => ws.close());
+        }
+
+        // applyFilter(currentFilter) above already triggered the first
+        // loadClips(); just wire up the periodic + real-time stuff here.
+        pollHealth();
+        setInterval(pollHealth, 5000);
+        openSocket();
+    </script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+/* ============================================================
+   Only the bits Tailwind can't do from utility classes alone.
+   ============================================================ */
+
+/* Event log scroll area — ~20 rows + sticky header. */
+.event-scroll {
+    max-height: calc(20 * 2.25rem + 2.5rem);
+}
+
+/* Clip list scroll area — clip rows have a select checkbox plus ★/✕ action
+   buttons so they're a touch taller than event rows. Sized for 15 rows +
+   sticky header with a little breathing room. */
+.clip-scroll {
+    max-height: calc(15 * 2.5rem + 2.75rem);
+}
+
+/* Camera image: JS toggles this class on .visible / error. */
+#cam-img.visible { display: block; }
+#cam-img.visible + #cam-placeholder { display: none; }
+
+/* Status dot — JS toggles these classes. !important to beat Tailwind's
+   late-injected bg-slate-* utilities declared on the same element. */
+.dot-on  { background-color: #22c55e !important; }   /* green-500 */
+.dot-off { background-color: #94a3b8 !important; }   /* slate-400 */
+
+/* Alert panel active flash: brief red ring when a motion alert arrives. */
+#alert-panel.active {
+    box-shadow: 0 0 0 2px #ef4444 inset;    /* red-500 */
+}

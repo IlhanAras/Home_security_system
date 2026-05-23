@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hybrid IoT Security Dashboard</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Apply theme as early as possible to avoid a flash of wrong colors. -->
+    <script>
+        (function () {
+            try {
+                const stored = localStorage.getItem("sec.theme");
+                const prefersDark = window.matchMedia &&
+                    window.matchMedia("(prefers-color-scheme: dark)").matches;
+                const useDark = stored ? stored === "dark" : prefersDark;
+                document.documentElement.classList.toggle("dark", useDark);
+            } catch (e) { /* ignore */ }
+        })();
+    </script>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"]
+                    }
+                }
+            }
+        };
+    </script>
+
+    <link rel="stylesheet" href="/style.css">
+</head>
+
+<body class="font-sans antialiased bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen">
+
+    <header class="border-b border-slate-200 dark:border-slate-800">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4 px-6 py-5">
+            <div class="flex flex-wrap items-center gap-5">
+                <h1 class="text-lg font-semibold tracking-tight">Hybrid IoT Security</h1>
+                <nav class="flex items-center gap-2 text-sm">
+                    <a href="/"
+                       class="px-3.5 py-1.5 rounded-lg bg-blue-600 text-white">
+                        Dashboard
+                    </a>
+                    <a href="/clips.html"
+                       class="px-3.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                        Clips
+                    </a>
+                </nav>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-5 text-sm">
+                <button id="btn-pir-toggle" type="button"
+                        class="px-3.5 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-semibold transition">
+                    PIR: ON
+                </button>
+                <div class="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+                    <span id="ws-dot" class="h-2 w-2 rounded-full bg-slate-400 dark:bg-slate-600"></span>
+                    <span id="ws-label">WebSocket: disconnected</span>
+                </div>
+                <div class="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+                    <span id="mqtt-dot" class="h-2 w-2 rounded-full bg-slate-400 dark:bg-slate-600"></span>
+                    <span id="mqtt-label">Broker: unknown</span>
+                </div>
+
+                <button id="theme-toggle" type="button"
+                        class="px-3.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                    Light
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6 px-6 py-8">
+
+        <!-- ==================== Last alert ==================== -->
+        <section id="alert-panel"
+                 class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 transition-colors">
+            <h2 class="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-4">
+                Last alert
+            </h2>
+            <div id="alert-none" class="text-slate-500 dark:text-slate-400">No motion yet.</div>
+            <div id="alert-content" class="hidden flex flex-wrap items-baseline gap-3">
+                <strong id="alert-event" class="text-red-500 font-semibold uppercase tracking-wide">motion</strong>
+                <span id="alert-device" class="font-mono text-sm text-slate-500 dark:text-slate-400"></span>
+                <time id="alert-time" class="text-sm text-slate-500 dark:text-slate-400"></time>
+            </div>
+        </section>
+
+        <!-- ==================== Device status ==================== -->
+        <section class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
+            <h2 class="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-4">
+                Device status
+            </h2>
+            <dl class="grid grid-cols-[auto_1fr] gap-x-8 gap-y-2 text-sm">
+                <dt class="text-slate-500 dark:text-slate-400">Status</dt>
+                <dd id="dev-status" class="font-mono">—</dd>
+                <dt class="text-slate-500 dark:text-slate-400">RSSI</dt>
+                <dd id="dev-rssi" class="font-mono">—</dd>
+                <dt class="text-slate-500 dark:text-slate-400">Uptime</dt>
+                <dd id="dev-uptime" class="font-mono">—</dd>
+                <dt class="text-slate-500 dark:text-slate-400">Updated</dt>
+                <dd id="dev-updated" class="font-mono">—</dd>
+            </dl>
+        </section>
+
+        <!-- ==================== Camera ==================== -->
+        <section class="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
+            <h2 class="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-4">
+                Camera
+            </h2>
+
+            <div class="flex flex-wrap gap-3 mb-6">
+                <button id="btn-cam-toggle" type="button"
+                        class="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition">
+                    Start stream
+                </button>
+                <button id="btn-stream-save" type="button"
+                        class="hidden px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition">
+                    Save stream
+                </button>
+            </div>
+
+            <div class="relative flex items-center justify-center bg-slate-900 dark:bg-black rounded-xl overflow-hidden min-h-[260px] border border-slate-200 dark:border-slate-800">
+                <img id="cam-img" alt="camera feed" class="max-w-full hidden">
+                <div id="cam-placeholder" class="text-slate-400 text-sm p-10 text-center">
+                    Stream is off. Press <span class="font-semibold text-slate-300">Start stream</span> to connect.
+                </div>
+            </div>
+
+            <div class="flex flex-wrap gap-3 mt-5">
+                <button id="btn-capture" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition">Capture now</button>
+                <button id="btn-led-on"  class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition">LED on</button>
+                <button id="btn-led-off" class="px-4 py-2 rounded-lg bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-sm font-medium transition">LED off</button>
+            </div>
+
+            <!-- Camera & clip settings — single source of truth for both stream and PIR clips -->
+            <form id="clip-config-form" class="mt-6 pt-5 border-t border-slate-200 dark:border-slate-800">
+                <span class="text-[0.7rem] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-2 block">
+                    Camera &amp; Clip Settings
+                </span>
+                <div class="flex flex-wrap items-end gap-4 mt-2">
+                    <label class="flex flex-col gap-1.5 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        Resolution
+                        <select id="clip-framesize"
+                                class="w-44 px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-slate-900 dark:text-slate-100">
+                            <option value="5">QVGA (320x240)</option>
+                            <option value="6">CIF (400x296)</option>
+                            <option value="8">VGA (640x480)</option>
+                            <option value="9" selected>SVGA (800x600)</option>
+                            <option value="10">XGA (1024x768)</option>
+                            <option value="12">HD (1280x720)</option>
+                            <option value="13">SXGA (1280x1024)</option>
+                            <option value="15">UXGA (1600x1200)</option>
+                        </select>
+                    </label>
+                    <label class="flex flex-col gap-1.5 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        Quality (10–63)
+                        <input id="clip-quality" type="number" min="10" max="63" value="16"
+                               class="w-24 px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-slate-900 dark:text-slate-100">
+                    </label>
+                    <label class="flex flex-col gap-1.5 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        Duration (s)
+                        <input id="clip-duration" type="number" min="1" max="60" value="5"
+                               class="w-24 px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-slate-900 dark:text-slate-100">
+                    </label>
+                    <label class="flex flex-col gap-1.5 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        FPS
+                        <input id="clip-fps" type="number" min="1" max="10" value="2"
+                               class="w-24 px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-slate-900 dark:text-slate-100">
+                    </label>
+                    <button type="submit"
+                            class="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition">
+                        Apply
+                    </button>
+                    <span id="clip-config-status" class="text-xs text-slate-500 dark:text-slate-400 self-center">&nbsp;</span>
+                </div>
+                <p class="text-[0.65rem] text-slate-400 dark:text-slate-500 mt-2">
+                    Resolution &amp; quality affect both live stream and PIR clips. Duration &amp; FPS only apply to clip recording.
+                </p>
+            </form>
+        </section>
+
+        <!-- ==================== Event log ==================== -->
+        <section class="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
+            <h2 class="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-4">
+                Event log
+            </h2>
+            <div class="event-scroll rounded-xl border border-slate-200 dark:border-slate-800 overflow-y-auto">
+                <table id="event-table" class="w-full text-sm">
+                    <thead class="bg-slate-50 dark:bg-slate-900">
+                        <tr class="text-left text-[0.7rem] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                            <th class="px-4 py-2.5 sticky top-0 bg-slate-50 dark:bg-slate-900">#</th>
+                            <th class="px-4 py-2.5 sticky top-0 bg-slate-50 dark:bg-slate-900">Time</th>
+                            <th class="px-4 py-2.5 sticky top-0 bg-slate-50 dark:bg-slate-900">Topic</th>
+                            <th class="px-4 py-2.5 sticky top-0 bg-slate-50 dark:bg-slate-900">Payload</th>
+                        </tr>
+                    </thead>
+                    <tbody id="event-body" class="divide-y divide-slate-100 dark:divide-slate-800"></tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <script src="/app.js"></script>
+</body>
+</html>
